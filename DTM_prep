@@ -1,0 +1,395 @@
+#!/usr/bin/env perl
+
+# Copyright (C) 2004-2024 Arizona Board of Regents on behalf of the Lunar and
+# Planetary Laboratory at the University of Arizona.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+# this file except in compliance with the License. You may obtain a copy of the
+# License at
+# 
+#    http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software distributed
+# under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+# CONDITIONS OF ANY KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
+
+use strict;
+use warnings;
+use File::Copy;
+use Getopt::Long;
+
+
+##############################################################################
+# Created 12/3/08 by Sarah Mattson/Sutton for HiROC.
+# Automates image pre-processing for ingestion into SOCET SET.
+# Modified 12/09/2009 to use updated scripts from USGS.
+#	- Main difference is no longer using ISIS2.
+# Version 2.2 12/31/2009 - SM
+#   - Customized for /data/DTM_working environment
+# Modified 9/30/2010 so you can create a project in your current directory.
+# Version 3.0
+# 	SM 2/2/2011 manually set library path (needed by calc_pushbroom_keywords).
+# Version 3.1
+#	SM 6/3/2011 modification to the stereo pair order algorithm
+# Version 3.2
+#   SM 1/28/13 updated for ISIS 3.4.2 and upgraded pnodes
+# Version 3.3
+#   SM 3/22/13 updated for ISIS 3.4.3 and replacement of calc_pushbroom_keywords 
+# Committed to CVS 6/13/16 - first commit, also added user DTMgen.conf and updated usage.
+# Version 3.4
+#   SS 10/10/2023 Changed input argument count check from 4 to 5.
+# Version 3.5
+#   SS 9/17/2024 Updated to accommodate SYN4 by adding a flag to output text file
+#                _SS_statistics.lis
+#                Commented out jitplot call.
+#                Updated path to hi4socet to point to modified version committed to 
+#                HiRISE subsystem which can deal with SYN4 data.
+#   SS 12/4/2024 Added trailing slash to HiRISE_ROOT path variable.
+#
+# % DTM_prep <projectName> <OBSID_L> <dejit_flage> <OBSID_R> <dejit_flag>
+#
+#
+# DEM_prep.pl does the following:
+# 1. Make project directories
+# 2. Copy balance cubes
+# 3. Run hi4socet, Annie Howington's (USGS) script
+# 4. Run hidata4socet, also Annie's script
+# 6. Write info for project setup in Socet Set.
+##############################################################################
+
+
+
+##############################################################################
+# begin main
+##############################################################################
+
+my $project = $ARGV[0];
+my $OBSIDL = $ARGV[1];
+my $dejit_flag_L = $ARGV[2];
+my $OBSIDR = $ARGV[3];
+my $dejit_flag_R = $ARGV[4];
+my $conf = $ARGV[5];
+
+my $usage = "\nDTM_prep usage: \n% DTM_prep <projectName> <OBSID_1> <dejit_flag> <OBSID_2> <dejit_flag> /path/to/DTMgen.conf \n
+\tWhere
+\t\t<projectName> is a descriptive name of the project, such as Columbus_Crater
+\t\t<OBSID_1>     is the observation ID of one of the stereo pair, such as PSP_004052_2045
+\t\t<OBSID_2>     is the other half of the stereo pair (the order doesn't matter)
+\t\t<dejit_flag>  can be 'y' or 'n' (w/o single quotes). If this is 'y', only the RED4-5 cubes
+\t\t                will be run through the standard prep script. The user should already have 
+\t\t                the dejittered RED mosaic cube, which requires different preprocessing.
+\t\t/path/to/DTMgen.conf is the path to the user's DTMgen.conf file located in their own directory.\n";
+
+##############################################################################
+# Check for proper number of input arguments
+##############################################################################
+
+   if ($#ARGV < 5 || $#ARGV > 5)
+      {
+      print "$usage\n";
+      exit 1;
+      }
+
+#---------------------------------------------------------------------
+# Get this system's $HiRISE_ROOT absolute path 
+#---------------------------------------------------------------------
+
+my $HiRISE_ROOT = `printenv HiRISE_ROOT`;
+  chomp($HiRISE_ROOT);
+  
+# Add trailing slash to HiRISE_ROOT so path is correct regardless of environment path setup.
+$HiRISE_ROOT = $HiRISE_ROOT."/";
+
+##############################################################################
+# Parse image IDs from inputs
+##############################################################################
+
+my $ORBNUML = substr ($OBSIDL,4,4);
+my $ORBL = "ORB_".$ORBNUML."00_".$ORBNUML."99/";
+my $MISSION_PHASEL = substr ($OBSIDL,0,3);
+my $HPATHL = "/HiRISE/Data/HiStitch/".$MISSION_PHASEL."/".$ORBL.$OBSIDL."/".$OBSIDL;
+my $PPATHL = "/HiRISE/Data/HiJitReg/".$MISSION_PHASEL."/".$ORBL.$OBSIDL."/".$OBSIDL;
+
+my $ORBNUMR = substr ($OBSIDR,4,4);
+my $ORBR = "ORB_".$ORBNUMR."00_".$ORBNUMR."99/";
+my $MISSION_PHASER = substr ($OBSIDR,0,3);
+my $HPATHR = "/HiRISE/Data/HiStitch/".$MISSION_PHASER."/".$ORBR.$OBSIDR."/".$OBSIDR;
+my $PPATHR = "/HiRISE/Data/HiJitReg/".$MISSION_PHASER."/".$ORBR.$OBSIDR."/".$OBSIDR;
+
+my $filepath = `pwd`;
+chomp $filepath;
+$filepath = $filepath."/";
+
+my $ret;
+my $cmd;
+
+############################################################################
+# Set library path for isis3, needed for calc_pushbroom_keywords (called by hi4socet.pl_)
+############################################################################
+# my $libpath   = $ENV{'LD_LIBRARY_PATH'};
+# my $isis3lib  = ":/opt/usgs/isis3.Linux.X86_64/lib:/opt/usgs/isis3.Linux.X86_64/3rdParty/lib";
+# my $isis3libpath = $libpath.$isis3lib;
+# 
+# $ENV{'LD_LIBRARY_PATH'} = $isis3libpath;
+
+
+############################################################################
+# Create directories for each observation
+############################################################################
+
+$cmd = "mkdir $filepath$project";
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print STDERR "Cannot create new directory for $filepath$project\n";
+     }
+     
+############################################################################
+# Change directories so files go into the appropriate directories
+############################################################################
+
+chdir $filepath.$project  or die "\n Cannot change directory to $filepath$project\n";
+
+##############################################################################
+# Open LOG file
+##############################################################################
+
+my $log = "$project"."_DTM_prep.err";
+
+if (-e $log){
+   unlink $log; 
+   }
+
+open (LOG,">$log") or die "\n Cannot open $log\n";
+   
+############################################################################
+# Create subdirectories for each image
+############################################################################
+
+$cmd = "mkdir $OBSIDL";
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "$cmd\n Cannot create new directory for $OBSIDL\n";
+     }
+
+$cmd = "mkdir $OBSIDR";
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "$cmd\n Cannot create new directory for $OBSIDR\n";
+     }
+
+############################################################################
+# Run JitPlot to get an idea of the jitter situation
+############################################################################
+# 
+# $cmd = "/HiRISE/bin/JitPlot -Output $OBSIDL"."_jitplot.png $OBSIDL -C /HiRISE/Configuration/HiJitReg/HiJitReg.conf";
+# print STDOUT "\n$cmd\n";
+# $ret = system($cmd);
+# if ($ret != 0){
+#      print LOG "$cmd\n Jitplot failed for $OBSIDL\n";
+#      }
+# 
+# $cmd = "/HiRISE/bin/JitPlot -Output $OBSIDR"."_jitplot.png $OBSIDR";
+# print STDOUT "\n$cmd\n";
+# $ret = system($cmd);
+# if ($ret != 0){
+#      print LOG "$cmd\n Jitplot failed for $OBSIDL\n";
+#      }
+
+############################################################################
+# Copy the RED balance cubes into each observation directory
+# If the dejit flag is y then only copy the RED 4 and 5 cubes and run the rest
+#  of the script on them to save time.
+############################################################################
+my $copy_cubes_cmd;
+
+if ($dejit_flag_L eq 'y'){
+$copy_cubes_cmd = "$HiRISE_ROOT"."DTM/copy_balance_cubes.pl $OBSIDL 4 5";         
+}
+elsif ($dejit_flag_L eq 'n'){
+$copy_cubes_cmd = "$HiRISE_ROOT"."DTM/copy_balance_cubes.pl $OBSIDL 0 9";         
+}
+
+chdir $filepath.$project."/".$OBSIDL  or die "\n Cannot change directory to $OBSIDL\n";;
+
+$cmd = $copy_cubes_cmd;
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "$cmd\n Failed to copy balance cubes for $OBSIDL\n";
+     }
+     
+# Get the bin mode while we are here.
+$cmd = "getkey from=$OBSIDL"."_RED5.balance.cub grpname=Instrument keyword=Summing";
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "$cmd\n getkey failed for $OBSIDL"."_RED5.balance.cub\n";
+     }    
+my $OBSIDL_bin = `$cmd`;
+chomp $OBSIDL_bin;
+
+
+# Set the SYN4 flag while we are here.
+# The default is that the observation does not have the SYN4 cube, flag = 0.
+# Set it to 1 if true. The flag will be noted in the output _SS_statistics.lis file.
+my $SYN4_L_flag = 0;
+if (-e "${OBSIDL}_SYN4.balance.cub") {
+	print STDOUT "\nSetting the SYN4 flag to 1 (TRUE) for $OBSIDL.\n";
+     $SYN4_L_flag = 1;
+     }
+
+# Now do the same for the R image.
+
+chdir $filepath.$project."/".$OBSIDR  or die "\n Cannot change directory to $OBSIDR\n";;
+
+if ($dejit_flag_R eq 'y'){
+$copy_cubes_cmd = "$HiRISE_ROOT"."DTM/copy_balance_cubes.pl $OBSIDR 4 5";
+}
+elsif ($dejit_flag_R eq 'n'){
+$copy_cubes_cmd = "$HiRISE_ROOT"."DTM/copy_balance_cubes.pl $OBSIDR 0 9";
+}
+
+$cmd = $copy_cubes_cmd;
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "$cmd\n Failed to copy balance cubes for $OBSIDR\n";
+     }
+
+# Get the bin mode while we are here.
+$cmd = "getkey from=$OBSIDR"."_RED5.balance.cub grpname=Instrument keyword=Summing";
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "$cmd\n getkey failed for $OBSIDR"."_RED5.balance.cub\n";
+     }    
+my $OBSIDR_bin = `$cmd`;
+chomp $OBSIDR_bin;
+
+# Set the SYN4 flag while we are here.
+# The default is that the observation does not have the SYN4 cube, flag = 0.
+# Set it to 1 if true. The flag will be noted in the output _SS_statistics.lis file.
+my $SYN4_R_flag = 0;
+if (-e "${OBSIDR}_SYN4.balance.cub") {
+	print STDOUT "\nSetting the SYN4 flag to 1 (TRUE) for $OBSIDR.\n";
+     $SYN4_R_flag = 1;
+     }
+
+
+############################################################################
+# Run hi4socet on each image. Set the path to the program to suit.
+############################################################################
+
+chdir $filepath.$project."/".$OBSIDL  or die "\n Cannot change directory to $OBSIDL\n";
+
+$cmd = "$HiRISE_ROOT"."DTM/hi4socet_HiROC.pl $OBSIDL".".list";         	  
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "$cmd\n hi4socet_HiROC.pl failed for $OBSIDL\nSee hi4socet.err\n";
+     }
+
+chdir $filepath.$project."/".$OBSIDR  or die "\n Cannot change directory to $OBSIDR\n";
+
+$cmd = "$HiRISE_ROOT"."DTM/hi4socet_HiROC.pl $OBSIDR".".list";         	  
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "$cmd\n hi4socet_HiROC.pl failed for $OBSIDR\nSee hi4socet.err\n";
+     }
+
+
+############################################################################
+# Call hidata4socet.pl
+############################################################################
+
+chdir $filepath.$project  or die "\n Cannot change directory to $filepath.$project\n";
+
+$cmd = "$HiRISE_ROOT"."DTM/hidata4socet_HiROC.pl $project $OBSIDL"."/"."$OBSIDL"."_REDmos_hijitreged.balance.noproj.cub $OBSIDR"."/"."$OBSIDR"."_REDmos_hijitreged.balance.noproj.cub";
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "$cmd\n hidata4socet_HiROC.pl failed.\n";
+     }
+     
+
+############################################################################
+# Open the stats file created in hidata4socet and write the pair order and summing to it.
+############################################################################
+my $project_stats = "./" . $project . "_SS_statistics.lis";
+  open (STATS,">>$project_stats") or die "\n Cannot open $project_stats\n";
+  
+$cmd = "$HiRISE_ROOT"."DTM/stereo_pair_order.pl $OBSIDL $OBSIDR $conf";
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "stereo_pair_order.pl failed.\n";
+     }
+
+my $output_file = "output_file.txt";
+
+	open (PAIR, "<$output_file") or die "\n Cannot open $output_file.\n";
+	
+	while (<PAIR>) {
+	print STATS $_;
+	}
+	
+	close (PAIR);
+	
+  print STATS "\n$OBSIDL Summing = $OBSIDL_bin\n";
+  print STATS "$OBSIDR Summing = $OBSIDR_bin\n";
+  
+  # Write the SYN4 flag. 1=YES 0=NO.
+  print STATS "\n${OBSIDL} SYN4 = $SYN4_L_flag\n";
+  print STATS "${OBSIDR} SYN4 = $SYN4_R_flag\n";
+
+  close (STATS);
+
+############################################################################
+# Cleanup, if the mosaic cubes were created successfully.
+############################################################################
+
+chdir $filepath.$project."/".$OBSIDL  or die "\n Cannot change directory to $OBSIDL\n";;
+
+if (-e $OBSIDL . "_REDmos_hijitreged.raw"){
+$cmd = "rm -f *.balance.cub";
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "Cannot delete balance cubes in $OBSIDL\n";
+     }
+}
+else {
+print LOG "$OBSIDL" . "_REDmos_hijitreged.balance.noproj.raw not created. Check for errors and start again.\n";
+}
+     
+chdir $filepath.$project."/".$OBSIDR  or die "\n Cannot change directory to $OBSIDR\n";;
+
+if (-e $OBSIDR . "_REDmos_hijitreged.raw"){
+$cmd = "rm -f *.balance.cub";
+print STDOUT "\n$cmd\n";
+$ret = system($cmd);
+if ($ret != 0){
+     print LOG "Cannot delete balance cubes in $OBSIDR\n";
+     }
+}
+else {
+print LOG "$OBSIDR" . "_REDmos_hijitreged.balance.noproj.raw not created. Check for errors and start again.\n";     
+}
+
+unlink "output_file.txt";
+
+close (LOG);
+
+
+##############################################################################
+# end main
+##############################################################################
+
+
+
+
