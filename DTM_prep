@@ -317,28 +317,28 @@ if ($ret != 0){
      }
      
 
-############################################################################
-# Open the stats file created in hidata4socet and write the pair order and summing to it.
-############################################################################
-my $project_stats = "./" . $project . "_SS_statistics.lis";
-  open (STATS,">>$project_stats") or die "\n Cannot open $project_stats\n";
-  
-$cmd = "$HiRISE_ROOT"."DTM/stereo_pair_order.pl $OBSIDL $OBSIDR $conf";
-print STDOUT "\n$cmd\n";
-$ret = system($cmd);
-if ($ret != 0){
-     print LOG "stereo_pair_order.pl failed.\n";
-     }
-
-my $output_file = "output_file.txt";
-
-	open (PAIR, "<$output_file") or die "\n Cannot open $output_file.\n";
-	
-	while (<PAIR>) {
-	print STATS $_;
-	}
-	
-	close (PAIR);
+# ############################################################################
+# # Open the stats file created in hidata4socet and write the pair order and summing to it.
+# ############################################################################
+# my $project_stats = "./" . $project . "_SS_statistics.lis";
+#   open (STATS,">>$project_stats") or die "\n Cannot open $project_stats\n";
+#   
+# $cmd = "$HiRISE_ROOT"."DTM/stereo_pair_order.pl $OBSIDL $OBSIDR $conf";
+# print STDOUT "\n$cmd\n";
+# $ret = system($cmd);
+# if ($ret != 0){
+#      print LOG "stereo_pair_order.pl failed.\n";
+#      }
+# 
+# my $output_file = "output_file.txt";
+# 
+# 	open (PAIR, "<$output_file") or die "\n Cannot open $output_file.\n";
+# 	
+# 	while (<PAIR>) {
+# 	print STATS $_;
+# 	}
+# 	
+# 	close (PAIR);
 	
   print STATS "\n$OBSIDL Summing = $OBSIDL_bin\n";
   print STATS "$OBSIDR Summing = $OBSIDR_bin\n";
