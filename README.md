@@ -1,4 +1,5 @@
-# HiRISE DTM tools
+# hirise-dtm-tools
+HiRISE DTM tools
 
 
 This repository contains a version of the preprocessing scripts for HiRISE stereo pairs 
