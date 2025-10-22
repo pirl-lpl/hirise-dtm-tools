@@ -136,6 +136,66 @@ DTM_prep
 For questions contact Sarah Sutton (ssutton at lpl dot arizona dot edu).
 
 
+## Preprocessing color
+
+The script `hicolor4socet_isis343-4.pl` and `hicolor_noproj_isis344.pl` preprocess HiRISE color.
+
+`hicolor4socet` calls `hicolor_noproj`.
+
+Both scripts were originally written by Annie Howington, formerly of the USGS, and have not been modified much for use at HiROC.
+
+Do change the path to your scripts folder (specifically the folder containing `hicolor_noproj`) on line 22 of `hicolor4socet`.
+
+Go to the /data/DTM_working/Projects/<Project_name>/ directory. Make a directory called <image_ID>_COLOR in the project directory.
+`cd /data/DTM_working/Projects/<Project_name>/`
+`mkdir <image_ID>_COLOR`
+`cd <image_ID>_COLOR`
+
+Copy the UNFILTERED_COLOR4 and UNFILTERED_COLOR5 cubes from the /HiRISE/Data/HiColorNorm/<mission_phase>/<ORB_range>/<Image_ID> to the <image_ID>_COLOR directory. For Example:
+`cp /path/to/ESP/ORB_023100_023199/ESP_023119_1550/ESP_023119_1550_UNFILTERED_COLOR{4,5}.cub.gz .`
+
+If necessary type gunzip *.gz (Most of the UNFILTERED_COLOR cubes have been gzipped, so they end in .gz).
+Make a list of these two cubes: ls *.cub > cubelist
+
+Run hicolor4socet.pl
+`/path/to/hicolor4socet_isis343-4.pl cubelist`
+
+## Import Color to SOCET SET
+
+Copy the .raw file for each color band over to the SOCET SET workstation.
+
+In a Windows Command prompt, run for example:
+
+`start_socet -single import_colorHiRISE.exe ESP_088929_1845_UNFILTERED_COLOR_BG.raw ESP_088929_1845_REDmos_hijitreged.sup`
+
+Repeat for each color band, importing it to match the corresponding REDmos_hijitreged image (.sup file).
+
+Validate that each color band imported correctly by loading the corresponding REDmos_hijitreged image in the left eye, and the color band in the right eye in SOCET SET. 
+
+They should match exactly, with the color band only overlying the center of the REDmos swath.
+
+## Run orthophoto script to automatically produce Orthophotos.
+
+To generate all the orthophoto settings files and a batch file automatically, run orthoscriptV0.91.py on the SOCET SET workstation.
+
+1. Run the script in the terminal or just run it by double clicking the file. Either way will work.
+
+2. The script will prompt you for your project name.  You can copy and paste that from the SOCET SET menu.
+
+3. The script will prompt you for the number of images you want to generate orthos. IMPORTANT NOTE: the script auto grabs the images ID after you select it 
+later on as well as grabbing the COLOR Sup files from your COLOR directory if its formated correctly
+
+4. The script will prompt you to select the image sup file for orthos generation in a GUI similar to  file explorer and after each one you select 
+it will print the name in the terminal for you to see what images you've selected so far.
+
+5. The script will run through a similar prompt and selection process for the DTM and the Calc Ortho Boundry file for ortho generation.
+
+6. once all the files are selected the script will generate all the appropriate .set files as well as a numbered master orthos file in case you run 
+multiple and place them in your batch_dir.
+
+7. From there just double click the master_orthos.bat file and let the files generate.
+
+
 ### References
 
 [1] [Kirk et al., 2008](https://doi.org/10.1029/2007JE003000)
