@@ -1,0 +1,1 @@
+del %USERPROFILE%\.proj%USERNAME%set, E:\socet\data\%1\.mem%USERNAME%set, E:\socet\data\%1\.cur%USERNAME%set

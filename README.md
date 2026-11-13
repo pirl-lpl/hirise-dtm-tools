@@ -146,7 +146,7 @@ Both scripts were originally written by Annie Howington, formerly of the USGS, a
 
 Do change the path to your scripts folder (specifically the folder containing `hicolor_noproj`) on line 22 of `hicolor4socet`.
 
-Go to the /data/DTM_working/Projects/<Project_name>/ directory. Make a directory called <image_ID>_COLOR in the project directory.
+In your preprocessing directory, make a directory called <image_ID>_COLOR in the project directory.
 `cd /data/DTM_working/Projects/<Project_name>/`
 `mkdir <image_ID>_COLOR`
 `cd <image_ID>_COLOR`
@@ -162,6 +162,17 @@ Run hicolor4socet.pl
 
 ## Import Color to SOCET SET
 
+### Shortcut for importing COLOR products into SocetSet
+
+In powershell you can cd to your image directory where you are storing the COLOR products and run the following command to create an executable batch file to import the images into your SocetSet project. 
+Just make sure to run the command after changing directory to where the color images are and **replace <ProjectName> with your project's name in SocetSet**
+
+`Get-ChildItem *COLOR*.raw | ForEach-Object { $n = $_.Name; 'call start_socet -single import_colorHiRISE.exe <Project name> ' + $n + ' ' + $n.Substring(0,15) + '_REDmos_hijitreged.sup' } | Out-File -FilePath color_import.bat -Encoding ascii`
+
+<sub> This is just making a batch file with the structure below and auto populating for every *COLOR*.raw file in the directory you are</sub>
+<sub> `start_socet -single import_colorHiRISE.exe <COLOR_IMAGE_NAME>.raw <CORRESPONDING_IMAGEID>.sup</sub>
+
+### Manual Instructions for Color import
 Copy the .raw file for each color band over to the SOCET SET workstation.
 
 In a Windows Command prompt, run for example:
@@ -195,6 +206,11 @@ multiple and place them in your batch_dir.
 
 7. From there just double click the master_orthos.bat file and let the files generate.
 
+## OrthoscriptV0.91.py
+This is a helpful script to help with producing ortho products after NGATE has finished and any edits have bene made on the DTM. 
+It requires you to have already ingested your COLOR strips into SocetSet and this script can be moved to your desktop and executed by double clicking.
+You should then be able to follow its prompts to produce the appropiate .set files in your Projects "batch_dir" directory
+Along with these .set files it will also produce a "master_color_0.bat" file that you can execute by double clicking in the batch_dir directory which will execute the orthophoto application from SocetSet in serial sequence for your full RED and COLOR orthophotos.
 
 ### References
 
